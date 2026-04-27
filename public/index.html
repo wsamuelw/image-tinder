@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Tinder</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f0f0f;
+    color: #e0e0e0;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* Setup screen */
+  #setup {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 16px;
+  }
+
+  #setup h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #ff4458, #ff6b6b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  #setup p {
+    color: #888;
+    margin-bottom: 20px;
+  }
+
+  #path-input {
+    width: 400px;
+    max-width: 90vw;
+    padding: 14px 18px;
+    border: 2px solid #333;
+    border-radius: 12px;
+    background: #1a1a1a;
+    color: #e0e0e0;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #path-input:focus {
+    border-color: #ff4458;
+  }
+
+  #start-btn {
+    padding: 14px 40px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ff4458, #ff6b6b);
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.15s;
+  }
+
+  #start-btn:hover { transform: scale(1.03); }
+  #start-btn:active { transform: scale(0.98); }
+  #start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #setup-error {
+    color: #ff4458;
+    font-size: 0.9rem;
+    min-height: 1.2em;
+  }
+
+  /* Main app */
+  #app {
+    display: none;
+    height: 100vh;
+    flex-direction: column;
+  }
+
+  #app.active {
+    display: flex;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 24px;
+    background: #1a1a1a;
+    border-bottom: 1px solid #222;
+  }
+
+  header h2 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #aaa;
+  }
+
+  #stats {
+    display: flex;
+    gap: 20px;
+    font-size: 0.85rem;
+    color: #888;
+  }
+
+  #stats span { font-weight: 600; }
+  #stats .kept-val { color: #4ade80; }
+  #stats .deleted-val { color: #ff4458; }
+
+  /* Progress bar */
+  #progress-bar {
+    height: 3px;
+    background: #222;
+    position: relative;
+  }
+
+  #progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4ade80, #ff4458);
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  /* Card area */
+  #card-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    padding: 20px;
+  }
+
+  .card {
+    position: absolute;
+    width: min(700px, 90vw);
+    height: min(550px, 75vh);
+    border-radius: 16px;
+    overflow: hidden;
+    background: #1a1a1a;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    cursor: grab;
+    touch-action: none;
+    transition: box-shadow 0.2s;
+  }
+
+  .card:active { cursor: grabbing; }
+
+  .card img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+
+  .card-back {
+    transform: scale(0.95);
+    opacity: 0.4;
+    z-index: 0;
+  }
+
+  .card-front {
+    z-index: 1;
+  }
+
+  /* Swipe overlay */
+  .swipe-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .swipe-overlay.keep {
+    background: rgba(74, 222, 128, 0.15);
+  }
+
+  .swipe-overlay.delete {
+    background: rgba(255, 68, 88, 0.15);
+  }
+
+  .swipe-overlay .label {
+    font-size: 2.5rem;
+    font-weight: 800;
+    padding: 12px 30px;
+    border: 4px solid;
+    border-radius: 12px;
+    transform: rotate(-15deg);
+    text-transform: uppercase;
+    letter-spacing: 4px;
+  }
+
+  .swipe-overlay.keep .label {
+    color: #4ade80;
+    border-color: #4ade80;
+  }
+
+  .swipe-overlay.delete .label {
+    color: #ff4458;
+    border-color: #ff4458;
+  }
+
+  /* Filename */
+  #filename {
+    text-align: center;
+    padding: 8px;
+    font-size: 0.8rem;
+    color: #666;
+    background: #1a1a1a;
+    border-top: 1px solid #222;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Footer controls */
+  footer {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px;
+    background: #1a1a1a;
+    border-top: 1px solid #222;
+  }
+
+  .ctrl-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 2px solid #333;
+    background: #222;
+    color: #aaa;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .ctrl-btn:hover { transform: scale(1.1); }
+  .ctrl-btn:active { transform: scale(0.95); }
+
+  .ctrl-btn.undo-btn { border-color: #fbbf24; color: #fbbf24; }
+  .ctrl-btn.delete-btn { border-color: #ff4458; color: #ff4458; }
+  .ctrl-btn.keep-btn { border-color: #4ade80; color: #4ade80; }
+  .ctrl-btn.skip-btn { border-color: #60a5fa; color: #60a5fa; }
+
+  /* Done screen */
+  #done {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 20px;
+  }
+
+  #done.active { display: flex; }
+
+  #done h1 { font-size: 2.5rem; }
+
+  #done-stats {
+    display: flex;
+    gap: 40px;
+    font-size: 1.2rem;
+  }
+
+  #done-stats .stat-val {
+    font-size: 2rem;
+    font-weight: 700;
+  }
+
+  #done .kept-val { color: #4ade80; }
+  #done .deleted-val { color: #ff4458; }
+
+  #restart-btn {
+    padding: 14px 40px;
+    border: 2px solid #333;
+    border-radius: 12px;
+    background: transparent;
+    color: #aaa;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  #restart-btn:hover {
+    border-color: #666;
+    color: #e0e0e0;
+  }
+
+  /* Keyboard hints */
+  .hints {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    padding: 6px;
+    font-size: 0.75rem;
+    color: #555;
+  }
+
+  .hints kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.7rem;
+  }
+</style>
+</head>
+<body>
+
+<!-- Setup screen -->
+<div id="setup">
+  <h1>Image Tinder</h1>
+  <p>Swipe left to delete, right to keep</p>
+  <input type="text" id="path-input" placeholder="/path/to/your/images" autofocus>
+  <button id="start-btn">Start Reviewing</button>
+  <div id="setup-error"></div>
+</div>
+
+<!-- Main app -->
+<div id="app">
+  <header>
+    <h2 id="dir-name"></h2>
+    <div id="stats">
+      <div>Kept: <span class="kept-val" id="kept-count">0</span></div>
+      <div>Deleted: <span class="deleted-val" id="deleted-count">0</span></div>
+      <div>Remaining: <span id="remaining-count">0</span></div>
+    </div>
+  </header>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+
+  <div id="card-area">
+    <div class="card card-back" id="card-back">
+      <img id="img-back" alt="">
+    </div>
+    <div class="card card-front" id="card-front">
+      <img id="img-front" alt="">
+      <div class="swipe-overlay keep" id="overlay-keep">
+        <div class="label">Keep</div>
+      </div>
+      <div class="swipe-overlay delete" id="overlay-delete">
+        <div class="label">Delete</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="filename"></div>
+
+  <footer>
+    <button class="ctrl-btn undo-btn" id="btn-undo" title="Undo (U)">&#8630;</button>
+    <button class="ctrl-btn delete-btn" id="btn-delete" title="Delete (Left Arrow)">&#10005;</button>
+    <button class="ctrl-btn skip-btn" id="btn-skip" title="Skip (Space)">&#8634;</button>
+    <button class="ctrl-btn keep-btn" id="btn-keep" title="Keep (Right Arrow)">&#10003;</button>
+  </footer>
+
+  <div class="hints">
+    <div><kbd>&#8592;</kbd> Delete</div>
+    <div><kbd>&#8594;</kbd> Keep</div>
+    <div><kbd>Space</kbd> Skip</div>
+    <div><kbd>U</kbd> Undo</div>
+  </div>
+</div>
+
+<!-- Done screen -->
+<div id="done">
+  <h1>All Done!</h1>
+  <div id="done-stats">
+    <div>
+      <div class="stat-val kept-val" id="final-kept">0</div>
+      <div>Kept</div>
+    </div>
+    <div>
+      <div class="stat-val deleted-val" id="final-deleted">0</div>
+      <div>Deleted</div>
+    </div>
+  </div>
+  <button id="restart-btn">Review Another Folder</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let currentFilename = null;
+let undoStack = [];
+const MAX_UNDO = 20;
+
+// Setup
+$('start-btn').addEventListener('click', startReviewing);
+$('path-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startReviewing();
+});
+
+async function startReviewing() {
+  const dirPath = $('path-input').value.trim();
+  if (!dirPath) return;
+
+  $('start-btn').disabled = true;
+  $('setup-error').textContent = '';
+
+  try {
+    const res = await fetch('/api/select-directory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: dirPath })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      $('setup-error').textContent = data.error || 'Failed to load directory';
+      $('start-btn').disabled = false;
+      return;
+    }
+
+    if (data.total === 0) {
+      $('setup-error').textContent = 'No images found in that folder';
+      $('start-btn').disabled = false;
+      return;
+    }
+
+    undoStack = [];
+    $('dir-name').textContent = dirPath.split('/').pop();
+    $('setup').style.display = 'none';
+    $('app').classList.add('active');
+
+    loadCurrentImage();
+    updateStats();
+  } catch (err) {
+    $('setup-error').textContent = 'Could not connect to server';
+    $('start-btn').disabled = false;
+  }
+}
+
+async function loadCurrentImage() {
+  try {
+    const res = await fetch('/api/current');
+    const data = await res.json();
+
+    if (data.done) {
+      showDone();
+      return;
+    }
+
+    currentFilename = data.filename;
+    $('img-front').src = `/api/images/${encodeURIComponent(currentFilename)}?t=${Date.now()}`;
+    $('filename').textContent = currentFilename;
+    $('remaining-count').textContent = data.remaining;
+
+    // Load preview of next image
+    const nextRes = await fetch('/api/current');
+    // We already loaded current, so just clear back for now
+    $('img-back').src = '';
+  } catch (err) {
+    console.error('Failed to load image:', err);
+  }
+}
+
+async function performAction(action) {
+  if (!currentFilename) return;
+
+  const prevFilename = currentFilename;
+  const prevIndex = $('remaining-count').textContent;
+
+  try {
+    const res = await fetch(`/api/${action}`, { method: 'POST' });
+    const data = await res.json();
+
+    if (data.done) {
+      undoStack.push({ action, filename: prevFilename });
+      if (undoStack.length > MAX_UNDO) undoStack.shift();
+      showDone();
+      updateStats();
+      return;
+    }
+
+    undoStack.push({ action, filename: prevFilename });
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+
+    updateStats();
+    loadCurrentImage();
+  } catch (err) {
+    console.error('Action failed:', err);
+  }
+}
+
+async function undoLastAction() {
+  if (undoStack.length === 0) return;
+
+  try {
+    const res = await fetch('/api/undo', { method: 'POST' });
+    if (res.ok) {
+      undoStack.pop();
+      updateStats();
+      loadCurrentImage();
+    }
+  } catch (err) {
+    console.error('Undo failed:', err);
+  }
+}
+
+async function updateStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const data = await res.json();
+    $('kept-count').textContent = data.kept;
+    $('deleted-count').textContent = data.deleted;
+    $('remaining-count').textContent = data.remaining;
+
+    const total = data.total;
+    const reviewed = total - data.remaining;
+    const pct = total > 0 ? (reviewed / total * 100) : 0;
+    $('progress-fill').style.width = pct + '%';
+  } catch (err) {
+    console.error('Stats failed:', err);
+  }
+}
+
+function showDone() {
+  $('app').classList.remove('active');
+  $('done').classList.add('active');
+  $('final-kept').textContent = $('kept-count').textContent;
+  $('final-deleted').textContent = $('deleted-count').textContent;
+}
+
+// Restart
+$('restart-btn').addEventListener('click', () => {
+  $('done').classList.remove('active');
+  $('setup').style.display = '';
+  $('start-btn').disabled = false;
+  $('path-input').value = '';
+  $('path-input').focus();
+  currentFilename = null;
+});
+
+// Button controls
+$('btn-delete').addEventListener('click', () => animateSwipe('delete'));
+$('btn-keep').addEventListener('click', () => animateSwipe('keep'));
+$('btn-skip').addEventListener('click', () => performAction('skip'));
+$('btn-undo').addEventListener('click', undoLastAction);
+
+// Keyboard controls
+document.addEventListener('keydown', e => {
+  if ($('setup').style.display !== 'none' && !$('setup').classList.contains('hidden')) return;
+  if (!$('app').classList.contains('active')) return;
+
+  switch (e.key) {
+    case 'ArrowLeft': animateSwipe('delete'); break;
+    case 'ArrowRight': animateSwipe('keep'); break;
+    case ' ': e.preventDefault(); performAction('skip'); break;
+    case 'u': case 'U': undoLastAction(); break;
+  }
+});
+
+// Swipe animation
+function animateSwipe(direction) {
+  const card = $('card-front');
+  const overlay = direction === 'keep' ? $('overlay-keep') : $('overlay-delete');
+  const xTarget = direction === 'keep' ? window.innerWidth : -window.innerWidth;
+
+  overlay.style.opacity = '1';
+  card.style.transition = 'transform 0.4s ease-out, opacity 0.4s ease-out';
+  card.style.transform = `translateX(${xTarget}px) rotate(${direction === 'keep' ? 15 : -15}deg)`;
+  card.style.opacity = '0';
+
+  setTimeout(() => {
+    card.style.transition = 'none';
+    card.style.transform = '';
+    card.style.opacity = '';
+    overlay.style.opacity = '0';
+    performAction(direction);
+  }, 400);
+}
+
+// Drag/swipe with mouse and touch
+let dragStartX = 0;
+let dragCurrentX = 0;
+let isDragging = false;
+
+const cardFront = $('card-front');
+
+function onDragStart(clientX) {
+  isDragging = true;
+  dragStartX = clientX;
+  dragCurrentX = 0;
+  cardFront.style.transition = 'none';
+}
+
+function onDragMove(clientX) {
+  if (!isDragging) return;
+  dragCurrentX = clientX - dragStartX;
+  const rotation = dragCurrentX * 0.08;
+  cardFront.style.transform = `translateX(${dragCurrentX}px) rotate(${rotation}deg)`;
+
+  // Show overlays based on drag direction
+  const threshold = 60;
+  if (dragCurrentX > threshold) {
+    $('overlay-keep').style.opacity = Math.min((dragCurrentX - threshold) / 150, 1);
+    $('overlay-delete').style.opacity = '0';
+  } else if (dragCurrentX < -threshold) {
+    $('overlay-delete').style.opacity = Math.min((-dragCurrentX - threshold) / 150, 1);
+    $('overlay-keep').style.opacity = '0';
+  } else {
+    $('overlay-keep').style.opacity = '0';
+    $('overlay-delete').style.opacity = '0';
+  }
+}
+
+function onDragEnd() {
+  if (!isDragging) return;
+  isDragging = false;
+
+  const swipeThreshold = 120;
+
+  if (dragCurrentX > swipeThreshold) {
+    animateSwipe('keep');
+  } else if (dragCurrentX < -swipeThreshold) {
+    animateSwipe('delete');
+  } else {
+    // Spring back
+    cardFront.style.transition = 'transform 0.3s ease-out';
+    cardFront.style.transform = '';
+    $('overlay-keep').style.opacity = '0';
+    $('overlay-delete').style.opacity = '0';
+  }
+}
+
+// Mouse events
+cardFront.addEventListener('mousedown', e => { e.preventDefault(); onDragStart(e.clientX); });
+document.addEventListener('mousemove', e => onDragMove(e.clientX));
+document.addEventListener('mouseup', onDragEnd);
+
+// Touch events
+cardFront.addEventListener('touchstart', e => onDragStart(e.touches[0].clientX), { passive: true });
+document.addEventListener('touchmove', e => {
+  if (isDragging) onDragMove(e.touches[0].clientX);
+}, { passive: true });
+document.addEventListener('touchend', onDragEnd);
+</script>
+</body>
+</html>
